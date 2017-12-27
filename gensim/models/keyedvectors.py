@@ -131,25 +131,54 @@ class KeyedVectorsBase(utils.SaveLoad):
          (in case word vectors are appended with document vectors afterwards)
 
         """
+
         if total_vec is None:
             total_vec = len(self.vocab)
         vector_size = self.syn0.shape[1]
         if fvocab is not None:
             logger.info("storing vocabulary in %s", fvocab)
             with utils.smart_open(fvocab, 'wb') as vout:
-                for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
-                    vout.write(utils.to_utf8("%s %s\n" % (word, vocab.count)))
+                # fixme:  Sort the vocab and keep </s> at the first position --ag
+                if '</s>' in self.vocab:
+                    vocab = self.vocab.pop('</s>')
+                    vout.write(utils.to_utf8("%s %s\n" % ('</s>', vocab.count)))
+                    for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
+                        vout.write(utils.to_utf8("%s %s\n" % (word, vocab.count)))
+                    # Sort the vec and keep </s> at the first position --aglater
+                    self.vocab['</s>'] = vocab
+                else:
+                    for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
+                        vout.write(utils.to_utf8("%s %s\n" % (word, vocab.count)))
+
         logger.info("storing %sx%s projection weights into %s", total_vec, vector_size, fname)
         assert (len(self.vocab), vector_size) == self.syn0.shape
         with utils.smart_open(fname, 'wb') as fout:
             fout.write(utils.to_utf8("%s %s\n" % (total_vec, vector_size)))
             # store in sorted order: most frequent words at the top
-            for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
+            # fixme:  Sort the vocab and keep </s> at the first position --ag
+            if '</s>' in self.vocab:
+                vocab = self.vocab.pop('</s>')
                 row = self.syn0[vocab.index]
                 if binary:
-                    fout.write(utils.to_utf8(word) + b" " + row.tostring())
+                    fout.write(utils.to_utf8('</s>') + b" " + row.tostring())
                 else:
-                    fout.write(utils.to_utf8("%s %s\n" % (word, ' '.join("%f" % val for val in row))))
+                    fout.write(utils.to_utf8("%s %s\n" % ('</s>', ' '.join("%f" % val for val in row))))
+
+                for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
+                    row = self.syn0[vocab.index]
+                    if binary:
+                        fout.write(utils.to_utf8(word) + b" " + row.tostring())
+                    else:
+                        fout.write(utils.to_utf8("%s %s\n" % (word, ' '.join("%f" % val for val in row))))
+                self.vocab['</s>'] = vocab
+
+            else:
+                for word, vocab in sorted(iteritems(self.vocab), key=lambda item: -item[1].count):
+                    row = self.syn0[vocab.index]
+                    if binary:
+                        fout.write(utils.to_utf8(word) + b" " + row.tostring())
+                    else:
+                        fout.write(utils.to_utf8("%s %s\n" % (word, ' '.join("%f" % val for val in row))))
 
     @classmethod
     def load_word2vec_format(cls, fname, fvocab=None, binary=False, encoding='utf8', unicode_errors='strict',
